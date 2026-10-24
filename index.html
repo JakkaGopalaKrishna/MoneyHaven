@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>JGK MoneyHaven PRO | Local Test</title>
+    <title>JGK MoneyHaven PRO | Balance Tracker</title>
     <link rel="icon" href="JGK_MoneyHaven_Logo.png" type="image/png">
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -670,7 +670,6 @@
 </head>
 
 <body>
-    <div style="max-width:1400px;margin:0 auto 12px;padding:10px 14px;border:1px solid #f59e0b;border-radius:10px;background:#422006;color:#fef3c7;font-size:13px;font-weight:600;">LOCAL TEST MODE — sample data only. This page does NOT connect to or modify your Google Sheet. Changes persist in this browser only. <button onclick="resetMoneyHavenLocalDemo()" style="margin-left:8px;padding:5px 9px;border-radius:6px;border:0;cursor:pointer;">Reset demo data</button></div>
 
     <div id="loader" class="loading-overlay">
         <div style="text-align: center;">
@@ -904,49 +903,6 @@
     </dialog>
 
     <script>
-/* LOCAL TEST MODE ONLY: sample transactions, persisted in this browser's localStorage.
-   This does not read or write your real Google Sheet. */
-(function () {
-  const KEY = 'moneyhaven-local-test-transactions-v1';
-  const sample = [
-    {sourceIndex:1, transactionId:'TXN-LOCAL-001', date:'2026-10-01', type:'Income', amount:35000, category:'Salary', payment:'Bank Transfer', notes:'Sample salary', includeInBalance:true, relatedTransactionIds:'', purpose:'income', relationship:'unmatched', matchedAmount:0, matchGroupId:''},
-    {sourceIndex:2, transactionId:'TXN-LOCAL-002', date:'2026-10-03', type:'Expense', amount:8000, category:'Rent', payment:'UPI', notes:'Sample rent', includeInBalance:true, relatedTransactionIds:'', purpose:'expense', relationship:'unmatched', matchedAmount:0, matchGroupId:''},
-    {sourceIndex:3, transactionId:'TXN-LOCAL-003', date:'2026-10-07', type:'Expense', amount:14700, category:'📈 Investment', payment:'UPI', notes:'Groww app | TONBO IMAGING INDIA LIMITED | IPO (sample only)', includeInBalance:true, relatedTransactionIds:'', purpose:'expense', relationship:'unmatched', matchedAmount:0, matchGroupId:''},
-    {sourceIndex:4, transactionId:'TXN-LOCAL-004', date:'2026-10-07', type:'Income', amount:14700, category:'📈 Investment', payment:'UPI', notes:'Separate sample credit; confirm actual meaning', includeInBalance:true, relatedTransactionIds:'', purpose:'income', relationship:'unmatched', matchedAmount:0, matchGroupId:''},
-    {sourceIndex:5, transactionId:'TXN-LOCAL-005', date:'2026-10-10', type:'Expense', amount:1200, category:'Food', payment:'UPI', notes:'Sample food', includeInBalance:true, relatedTransactionIds:'', purpose:'expense', relationship:'unmatched', matchedAmount:0, matchGroupId:''},
-    {sourceIndex:6, transactionId:'TXN-LOCAL-006', date:'2026-10-11', type:'Expense', amount:500, category:'Transport', payment:'UPI', notes:'Excluded sample row; IncludeInBalance false', includeInBalance:false, relatedTransactionIds:'', purpose:'expense', relationship:'unmatched', matchedAmount:0, matchGroupId:''}
-  ];
-  function read() {
-    try { const saved = JSON.parse(localStorage.getItem(KEY)); if (Array.isArray(saved)) return saved; } catch (_) {}
-    localStorage.setItem(KEY, JSON.stringify(sample)); return sample.map(x => ({...x}));
-  }
-  function save(updates) {
-    const rows = read();
-    for (const u of updates || []) {
-      const row = rows.find(x => x.transactionId === String(u.transactionId || '').trim());
-      if (!row) throw new Error('Local demo transaction not found: ' + u.transactionId);
-      row.purpose = u.purpose || 'unclassified';
-      row.relatedTransactionIds = Array.isArray(u.relatedTransactionIds) ? u.relatedTransactionIds.join(', ') : '';
-      row.relationship = u.relationship || 'awaiting_review';
-      row.matchedAmount = Number(u.matchedAmount || 0);
-      row.matchGroupId = u.matchGroupId || '';
-    }
-    localStorage.setItem(KEY, JSON.stringify(rows));
-    return {ok:true, updated:(updates || []).length};
-  }
-  const runner = {
-    _success: fn => { runner.success = fn; return runner; },
-    _failure: fn => { runner.failure = fn; return runner; },
-    withSuccessHandler(fn) { runner.success = fn; return runner; },
-    withFailureHandler(fn) { runner.failure = fn; return runner; },
-    getDashboardData() { try { runner.success?.({transactions:read()}); } catch(e) { runner.failure?.(e); } },
-    saveClassifications(payload) { try { runner.success?.(save(payload && payload.updates)); } catch(e) { runner.failure?.(e); } }
-  };
-  window.google = {script:{run:runner}};
-  window.resetMoneyHavenLocalDemo = function(){ localStorage.removeItem(KEY); location.reload(); };
-})();
-</script>
-    <script>
         const SHEET_ID = "1nAqs_jnqmHzLajhToxoTRL1qfREOoAC5QdQEoXFLq8c";
         const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
         const theme = {
@@ -1116,7 +1072,7 @@
                     const parsed = JSON.parse(String(reader.result || "{}"));
                     const incoming = parsed.classifications || parsed;
                     if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) throw new Error("Invalid classification file");
-                    if (!confirm("Import classifications into this browser’s local demo? This updates the matching transaction IDs in the sheet.")) return;
+                    if (!confirm("Import classifications to Google Sheets? This updates the matching transaction IDs in the sheet.")) return;
                     const updates = Object.entries(incoming).map(([transactionId, value]) => ({
                         transactionId,
                         purpose: normalizePurpose(value.purpose, "unclassified"),
@@ -1125,12 +1081,12 @@
                         matchedAmount: Number(value.matchedAmount || 0),
                         matchGroupId: value.matchGroupId || ""
                     }));
-                    setStorageNote("Importing classifications into local demo…");
+                    setStorageNote("Importing classifications to Google Sheets…");
                     google.script.run.withSuccessHandler(result => {
                         setStorageNote(`Imported ${result.updated} classification(s) to Google Sheets. Reloading…`);
                         loadDashboardFromSheet();
                     }).withFailureHandler(error => {
-                        setStorageNote(`Local demo import failed: ${error.message || error}`, true);
+                        setStorageNote(`Import failed: ${error.message || error}`, true);
                         alert(`Could not import classifications: ${error.message || error}`);
                     }).saveClassifications({ updates });
                 } catch (error) {
@@ -1179,13 +1135,13 @@
                 const partner = dashboardTransactionData.find(tx => tx.transactionId === partnerId);
                 if (partner) updates.push({ transactionId: partnerId, purpose: partner.purpose || "unclassified", relatedTransactionIds: [], relationship: "unmatched", matchedAmount: 0, matchGroupId: "" });
             }
-            setStorageNote("Removing match and saving changes in local demo…");
+            setStorageNote("Removing match and saving changes to Google Sheets…");
             google.script.run.withSuccessHandler(() => {
                 closeClassificationDialog();
-                setStorageNote("Match changes saved in this browser’s local demo.");
+                setStorageNote("Match changes saved directly to Google Sheets.");
                 loadDashboardFromSheet();
             }).withFailureHandler(error => {
-                setStorageNote(`Local demo save failed: ${error.message || error}`, true);
+                setStorageNote(`Could not save to Google Sheets: ${error.message || error}`, true);
                 alert(`Could not remove match: ${error.message || error}`);
             }).saveClassifications({ updates });
         }
@@ -1223,16 +1179,16 @@
 
             const saveButton = document.querySelector('#classificationForm button[type="submit"]');
             if (saveButton) { saveButton.disabled = true; saveButton.textContent = "Saving…"; }
-            setStorageNote("Saving classification and match in local demo…");
+            setStorageNote("Saving classification and match directly to Google Sheets…");
             google.script.run.withSuccessHandler(result => {
                 if (saveButton) { saveButton.disabled = false; saveButton.textContent = "Save classification"; }
                 closeClassificationDialog();
-                setStorageNote(`Saved ${result.updated} transaction record(s) in this browser’s local demo.`);
+                setStorageNote(`Saved ${result.updated} transaction record(s) directly to Google Sheets.`);
                 loadDashboardFromSheet();
             }).withFailureHandler(error => {
                 if (saveButton) { saveButton.disabled = false; saveButton.textContent = "Save classification"; }
                 setStorageNote(`Save failed: ${error.message || error}`, true);
-                alert(`Local demo save failed: ${error.message || error}`);
+                alert(`Could not save to Google Sheets: ${error.message || error}`);
             }).saveClassifications({ updates });
         });
 
@@ -1240,12 +1196,6 @@
         document.getElementById("classificationDialog").addEventListener("click", event => {
             if (event.target === event.currentTarget) closeClassificationDialog();
         });
-
-        // Initialize transaction-table state before any dashboard rendering can run.
-        let originalTransactionData = [];
-        let allTransactionData = [];
-        let currentPage = 1;
-        let rowsPerPage = 10;
 
         function loadDashboardFromSheet() {
             setStorageNote("Loading transactions and classifications from Google Sheets…");
@@ -1280,7 +1230,7 @@
                     };
                 });
                 renderDashboard(cleanData);
-                setStorageNote("LOCAL DEMO MODE: sample data only. Changes are saved in this browser only; your real Google Sheet is not connected.");
+                setStorageNote("Connected to Google Sheets. Classifications and reconciliation changes are stored in the sheet and available across browsers.");
                 const loader = document.getElementById("loader");
                 if (loader) { loader.style.opacity = "0"; setTimeout(() => loader.style.visibility = "hidden", 500); }
             }).withFailureHandler(error => {
@@ -1721,6 +1671,11 @@
                 options: { cutout: '70%', plugins: { legend: { position: 'bottom' } } }
             });
         }
+
+        let originalTransactionData = [];
+        let allTransactionData = [];
+        let currentPage = 1;
+        let rowsPerPage = 10;
 
         function updateRecentTransactions(data) {
             // store newest-first for pagination and keep original for filtering
