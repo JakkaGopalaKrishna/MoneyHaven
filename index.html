@@ -1063,6 +1063,83 @@
             URL.revokeObjectURL(url);
         }
 
+
+        // GitHub Pages adapter for the deployed MoneyHaven Apps Script web app.
+        // Reads use JSONP (cross-origin script requests); writes use a simple text/plain POST.
+        const MONEYHAVEN_API_URL = "https://script.google.com/macros/s/AKfycbxsE-MaPhDhmwGKf-utZ9YDh6QRoM04HSOApwZtTXb4MwlRbVu-XIaE8UYCB_WtkYcWFw/exec";
+        window.google = window.google || {};
+        window.google.script = window.google.script || {};
+        window.google.script.run = (() => {
+            let successHandler = (value) => {};
+            let failureHandler = (error) => {};
+            const runner = {
+                withSuccessHandler(fn) { successHandler = fn; return runner; },
+                withFailureHandler(fn) { failureHandler = fn; return runner; },
+                getDashboardData() {
+                    const callbackName = "__mh_jsonp_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+                    const script = document.createElement("script");
+                    const cleanup = () => {
+                        try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+                        script.remove();
+                    };
+                    const timeout = setTimeout(() => {
+                        cleanup();
+                        failureHandler(new Error("Timed out loading Google Sheets data. Check the Apps Script deployment and permissions."));
+                    }, 20000);
+                    window[callbackName] = (result) => {
+                        clearTimeout(timeout);
+                        cleanup();
+                        if (result && result.error) failureHandler(new Error(result.error));
+                        else successHandler(result);
+                    };
+                    script.onerror = () => {
+                        clearTimeout(timeout);
+                        cleanup();
+                        failureHandler(new Error("Could not reach the MoneyHaven Apps Script endpoint."));
+                    };
+                    script.src = MONEYHAVEN_API_URL + "?action=data&callback=" + encodeURIComponent(callbackName) + "&_=" + Date.now();
+                    document.head.appendChild(script);
+                },
+                saveClassifications(payload) {
+                    fetch(MONEYHAVEN_API_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+                        body: JSON.stringify({ action: "saveClassifications", payload })
+                    }).then(() => {
+                        // no-cors responses are opaque. Confirm by re-reading the sheet before reporting success.
+                        const callbackName = "__mh_verify_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+                        const script = document.createElement("script");
+                        const cleanup = () => {
+                            try { delete window[callbackName]; } catch (_) { window[callbackName] = undefined; }
+                            script.remove();
+                        };
+                        const timeout = setTimeout(() => {
+                            cleanup();
+                            failureHandler(new Error("The save request was sent, but verification timed out. Reload and check whether the changes were saved."));
+                        }, 20000);
+                        window[callbackName] = (result) => {
+                            clearTimeout(timeout);
+                            cleanup();
+                            if (result && result.error) {
+                                failureHandler(new Error(result.error));
+                                return;
+                            }
+                            successHandler({ updated: Array.isArray(payload?.updates) ? payload.updates.length : 0, verified: true });
+                        };
+                        script.onerror = () => {
+                            clearTimeout(timeout);
+                            cleanup();
+                            failureHandler(new Error("Save was sent, but the sheet could not be re-read to verify it."));
+                        };
+                        script.src = MONEYHAVEN_API_URL + "?action=data&callback=" + encodeURIComponent(callbackName) + "&_=" + Date.now();
+                        document.head.appendChild(script);
+                    }).catch(error => failureHandler(error));
+                }
+            };
+            return runner;
+        })();
+
         function importClassificationData(event) {
             const file = event.target.files?.[0];
             if (!file) return;
@@ -1099,7 +1176,7 @@
         }
 
         function showReconciliationHelp() {
-            alert("Type determines bank movement direction (Income = received; Expense = sent). Classification, related transaction IDs, relationship status, match amount, and match group are saved directly to Google Sheets through this Apps Script web app. Reciprocal, fully matched opposite-direction pairs are excluded from income/expense reports; original movements remain in balance history.");
+            alert("Type determines bank movement direction (Income = received; Expense = sent). Classification, related transaction IDs, relationship status, match amount, and match group are saved to Google Sheets through the configured Apps Script backend. Reciprocal, fully matched opposite-direction pairs are excluded from income/expense reports; original movements remain in balance history.");
         }
 
         function openClassificationDialog(encodedId) {
@@ -1242,14 +1319,8 @@
             }).getDashboardData();
         }
 
-        // This dashboard must be opened through the deployed Apps Script web app,
-        // because google.script.run securely calls the sheet backend.
-        if (window.google && google.script && google.script.run) {
-            loadDashboardFromSheet();
-        } else {
-            const loader = document.getElementById("loader");
-            if (loader) loader.innerHTML = '<div style="text-align:center;padding:24px;"><h2>Open the deployed MoneyHaven web app</h2><p style="margin-top:8px;color:var(--text-muted);">This version saves directly to Google Sheets and must be served by Google Apps Script, not opened as a local HTML file.</p></div>';
-        }
+        // On GitHub Pages, load real sheet data through the deployed Apps Script endpoint.
+        loadDashboardFromSheet();
 
         function renderDashboard(data) {
             dashboardTransactionData = [...data];
